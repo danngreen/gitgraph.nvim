@@ -28,7 +28,7 @@ function M.gitgraph(config, options, args)
 
   --- does the magic
   local start = os.clock()
-  local graph, lines, highlights, head_loc = M._gitgraph(data, options, config.symbols, config.format.fields)
+  local graph, lines, highlights, head_loc = M._gitgraph(data, options, config.symbols, config.format.lfields, config.format.fields, config.format.fields2)
   local dur = os.clock() - start
   log.info('_gitgraph dur:', dur * 1000, 'ms')
 
@@ -44,7 +44,7 @@ end
 ---@return I.Highlight[]
 ---@return integer? -- head location
 ---@return boolean -- true if contained bi-crossing
-function M._gitgraph(raw_commits, opt, sym, fields)
+function M._gitgraph(raw_commits, opt, sym, lfields, fields, fields2)
   local ITEM_HGS = require('gitgraph.highlights').ITEM_HGS
   local BRANCH_HGS = require('gitgraph.highlights').BRANCH_HGS
 
@@ -62,6 +62,7 @@ function M._gitgraph(raw_commits, opt, sym, fields)
   local GLRD = sym.GLRD
   local GLUD = sym.GLUD
   local GRUD = sym.GRUD
+
 
   local GFORKU = sym.GFORKU
   local GFORKD = sym.GFORKD
@@ -608,7 +609,7 @@ function M._gitgraph(raw_commits, opt, sym, fields)
       elseif options.mode == 'test' then
         add_to_row(row_to_test(proper_row))
       else
-        add_to_row(row_to_str(proper_row))
+		-- add_to_row(row_to_str(proper_row))
       end
 
       if options.mode ~= 'test' then
@@ -637,6 +638,7 @@ function M._gitgraph(raw_commits, opt, sym, fields)
             ['author'] = author,
             ['branch_name'] = branch_names,
             ['tag'] = tags,
+			['message'] = c.msg,
           }
 
           local pad_size = padding - #proper_row.cells
@@ -645,12 +647,31 @@ function M._gitgraph(raw_commits, opt, sym, fields)
             pad_size = pad_size - 2
           end
           local pad_str = (' '):rep(pad_size)
+
+		  -- Graph
+		  add_to_row(row_to_str(proper_row))
+
           add_to_row(pad_str)
           if is_head then
             add_to_row('*')
           end
 
-          --- add hihlights for hash, timestamp, branch_names and tags
+
+          --- Left fields
+          for _, name in ipairs(lfields) do
+            local value = items[name]
+            if value then
+              highlights[#highlights + 1] = {
+                hg = ITEM_HGS[name].name,
+                row = idx,
+                start = offset,
+                stop = offset + #value,
+              }
+              add_to_row(value)
+            end
+          end
+
+          --- Right fields
           for _, name in ipairs(fields) do
             local value = items[name]
             if value then
@@ -685,17 +706,21 @@ function M._gitgraph(raw_commits, opt, sym, fields)
           local c = graph[idx - 1].commit
           assert(c)
           if options.mode ~= 'debug' then
-            add_to_row((' '):rep(padding - #proper_row.cells))
-            add_to_row((' '):rep(7))
+			-- Graph
+		    add_to_row(row_to_str(proper_row))
 
-            highlights[#highlights + 1] = {
-              start = offset,
-              stop = offset + #c.msg,
-              row = idx,
-              hg = ITEM_HGS['message'].name,
-            }
 
-            add_to_row(c.msg)
+            -- add_to_row((' '):rep(padding - #proper_row.cells))
+            -- add_to_row((' '):rep(7))
+
+            -- highlights[#highlights + 1] = {
+            --   start = offset,
+            --   stop = offset + #c.msg,
+            --   row = idx,
+            --   hg = ITEM_HGS['message'].name,
+            -- }
+
+            -- add_to_row(c.msg)
           end
 
           -- row_str = row_str:gsub('%s*$', '')
