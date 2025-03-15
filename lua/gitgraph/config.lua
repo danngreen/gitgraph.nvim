@@ -5,6 +5,8 @@ local log = require('gitgraph.log')
 ---@field commit string
 ---@field merge_commit_end string
 ---@field commit_end string
+---@field default_remote_branch string
+---@field local_branch string
 ---@field GVER string
 ---@field GHOR string
 ---@field GCLD string
@@ -26,11 +28,19 @@ local log = require('gitgraph.log')
 ---@field GLRUCL string
 ---@field GLRUCR string
 
----@alias I.GGVarName "hash" | "timestamp" | "author" | "branch_name" | "tag" | "message"
+---@class I.GGRemote
+---@field server string
+---@field icon string
+
+---@alias I.GGVarName "hash" | "timestamp" | "author" | "branch_name" | "tag" | "message" | "short_branch_name"
 
 ---@class I.GGFormat
 ---@field timestamp string
 ---@field fields I.GGVarName[]
+---@field lfields I.GGVarName[]
+---@field fields2 I.GGVarName[]
+---@field remotes I.GGRemote[]
+
 
 ---@class I.Hooks
 ---@field on_select_commit fun(commit: I.Commit)
@@ -51,6 +61,8 @@ M.defaults = {
     commit = '*',
     merge_commit_end = 'M',
     commit_end = '*',
+	default_remote_branch = "▣",
+	local_branch = "○",
 
     -- Advanced symbols
     GVER = '│',
