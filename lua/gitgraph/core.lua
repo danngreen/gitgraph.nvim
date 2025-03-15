@@ -1,5 +1,6 @@
 local utils = require('gitgraph.utils')
 local log = require('gitgraph.log')
+local branchutil = require('gitgraph.branchname')
 
 ---@class I.Highlight
 ---@field hg string -- NOTE: fine to use string since lua internalizes strings
@@ -620,7 +621,11 @@ function M._gitgraph(raw_commits, opt, sym, format)
           assert(c)
       end
 
-      local left_field_width = 15
+      local left_field_max_width = 15
+      local graph_field_max_width = padding
+      local left_padding = left_field_max_width + graph_field_max_width
+      local this_row_graph_width = #proper_row.cells
+      local this_row_left_field_size = left_padding - this_row_graph_width
 
       if options.mode ~= 'test' then
         local hash = c.hash:sub(1, 7)
@@ -629,14 +634,20 @@ function M._gitgraph(raw_commits, opt, sym, format)
 
         local branch_names = #c.branch_names > 0 and ('(%s)'):format(table.concat(c.branch_names, ' | ')) or nil
 
-		-- TODO: 
-		-- origin/main 							=> [r]main
-		-- main 								=> [l]main
-		-- origin/main | main 					=> [rl]main
-		-- main | dev 							=> [l]main(+1)
-		-- main | dev | origin/main 			=> [rl]main(+1)
-		-- main | dev | origin/main | dev/main  => [rl]main(+1)
-		local short_branch_name = branch_names and string.sub(branch_names, 1, left_field_width - 2) or nil
+        local short_branch_name
+        if (#c.branch_names > 0) then
+          local branches = branchutil.branches(c.branch_names, format.remotes, sym.default_remote_branch, sym.local_branch)
+          local name, icon = pairs(branches)(branches)
+          short_branch_name = "["..icon.."]"..name
+          if #branches > 0 then
+            short_branch_name = string.sub(short_branch_name, 1, this_row_left_field_size - 1)
+            short_branch_name = short_branch_name.."+"..tostring(#branches-1)
+          else
+            short_branch_name = string.sub(short_branch_name, 1, this_row_left_field_size + 1)
+          end
+        else
+          short_branch_name = nil
+        end
 
         local is_head = false
         if not head_found then
@@ -659,12 +670,6 @@ function M._gitgraph(raw_commits, opt, sym, format)
           ['message'] = c.msg,
         }
 
-        local pad_size = padding - #proper_row.cells
-        if is_head then
-          pad_size = pad_size - 2
-        end
-        local pad_str = (' '):rep(pad_size)
-
         local function add_fields_to_row(flds)
           local w = 0
           for _, name in ipairs(flds) do
@@ -676,7 +681,7 @@ function M._gitgraph(raw_commits, opt, sym, format)
                 start = offset,
                 stop = offset + #value,
               }
-              w = w + #value + 1 -- +1 for the space added when concat the table
+              w = w + #value  -- +1 for the space added when concat the table
               add_to_row(value)
             end
           end
@@ -687,19 +692,20 @@ function M._gitgraph(raw_commits, opt, sym, format)
         add_to_row(row_to_str(proper_row))
 
         if node_row then
-          -- Padding
-          add_to_row(pad_str)
+          local remaining_padding = this_row_left_field_size
 
           -- HEAD star
           if is_head then
             add_to_row('*')
+            remaining_padding = remaining_padding - 2
           end
 
           --- Left fields
 		  local w = add_fields_to_row(format.lfields)
+          remaining_padding = remaining_padding - w
 
           -- Padding
-		  add_to_row((' '):rep((w < left_field_width) and (left_field_width - w - 1) or 0))
+		  add_to_row(('.'):rep(remaining_padding))
 
           --- Right fields
 		  add_fields_to_row(format.fields)
@@ -725,9 +731,7 @@ function M._gitgraph(raw_commits, opt, sym, format)
         else
           -- non-node row:
           -- Draw graph connectors on every other row
-
-          add_to_row((' '):rep(padding - #proper_row.cells))
-          add_to_row((' '):rep(left_field_width - 1))
+          add_to_row((' '):rep(left_padding - #proper_row.cells))
           add_fields_to_row(format.fields2)
 
         end
