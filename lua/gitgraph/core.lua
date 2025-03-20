@@ -1,5 +1,6 @@
-local utils = require('gitgraph.utils')
+local utils = require('getgraph.utils')
 local log = require('gitgraph.log')
+local branchutil = require('gitgraph.branchname')
 
 ---@class I.Highlight
 ---@field hg string -- NOTE: fine to use string since lua internalizes strings
@@ -28,7 +29,7 @@ function M.gitgraph(config, options, args)
 
   --- does the magic
   local start = os.clock()
-  local graph, lines, highlights, head_loc = M._gitgraph(data, options, config.symbols, config.format.fields)
+  local graph, lines, highlights, head_loc = M._gitgraph(data, options, config.symbols, config.format)
   local dur = os.clock() - start
   log.info('_gitgraph dur:', dur * 1000, 'ms')
 
@@ -38,13 +39,13 @@ end
 ---@param raw_commits I.RawCommit[]
 ---@param opt I.DrawOptions
 ---@param sym I.GGSymbols
----@param fields I.GGVarName[]
+---@param format I.GGFormat
 ---@return I.Row[]
 ---@return string[]
 ---@return I.Highlight[]
 ---@return integer? -- head location
 ---@return boolean -- true if contained bi-crossing
-function M._gitgraph(raw_commits, opt, sym, fields)
+function M._gitgraph(raw_commits, opt, sym, format)
   local ITEM_HGS = require('gitgraph.highlights').ITEM_HGS
   local BRANCH_HGS = require('gitgraph.highlights').BRANCH_HGS
 
@@ -62,6 +63,7 @@ function M._gitgraph(raw_commits, opt, sym, fields)
   local GLRD = sym.GLRD
   local GLUD = sym.GLUD
   local GRUD = sym.GRUD
+
 
   local GFORKU = sym.GFORKU
   local GFORKD = sym.GFORKD
@@ -607,51 +609,69 @@ function M._gitgraph(raw_commits, opt, sym, fields)
         add_to_row(row_to_str(proper_row))
       elseif options.mode == 'test' then
         add_to_row(row_to_test(proper_row))
-      else
-        add_to_row(row_to_str(proper_row))
       end
 
+      local c = proper_row.commit
+      local node_row
+      if c then
+          node_row = true
+      else
+          node_row = false
+          c = graph[idx - 1].commit
+          assert(c)
+      end
+
+      local left_field_max_width = 15
+      local graph_field_max_width = padding
+      local left_padding = left_field_max_width + graph_field_max_width
+      local this_row_graph_width = #proper_row.cells
+      local this_row_left_field_size = left_padding - this_row_graph_width
+
       if options.mode ~= 'test' then
-        local c = proper_row.commit
-        if c then
-          local hash = c.hash:sub(1, 7)
-          local timestamp = c.author_date
-          local author = c.author_name
+        local hash = c.hash:sub(1, 7)
+        local timestamp = c.author_date
+        local author = c.author_name
 
-          local branch_names = #c.branch_names > 0 and ('(%s)'):format(table.concat(c.branch_names, ' | ')) or nil
+        local branch_names = #c.branch_names > 0 and ('(%s)'):format(table.concat(c.branch_names, ' | ')) or nil
 
-          local is_head = false
-          if not head_found then
-            is_head = branch_names and branch_names:match('HEAD %->') or false
-            if is_head then
-              head_found = true
-              head_loc = idx
-            end
+        local short_branch_name
+        if (#c.branch_names > 0) then
+          local branches = branchutil.branches(c.branch_names, format.remotes, sym.fallback_remote_icon)
+          -- get first branch name (if more than one on this commit, then display +N)
+          if #branches > 1 then
+            short_branch_name = string.sub(branches[1].text, 1, this_row_left_field_size - 1)
+            short_branch_name = short_branch_name.."+"..tostring(#branches - 1)
+          else
+            short_branch_name = string.sub(branches[1].text, 1, this_row_left_field_size + 1)
           end
+        else
+          short_branch_name = nil
+        end
 
-          local tags = #c.tags > 0 and ('(%s)'):format(table.concat(c.tags, ' | ')) or nil
-
-          local items = {
-            ['hash'] = hash,
-            ['timestamp'] = timestamp,
-            ['author'] = author,
-            ['branch_name'] = branch_names,
-            ['tag'] = tags,
-          }
-
-          local pad_size = padding - #proper_row.cells
-
+        local is_head = false
+        if not head_found then
+          is_head = branch_names and branch_names:match('%HEAD %->') or false
           if is_head then
-            pad_size = pad_size - 2
+            head_found = true
+            head_loc = idx
           end
-          local pad_str = (' '):rep(pad_size)
-          add_to_row(pad_str)
-          if is_head then
-            add_to_row('*')
-          end
+        end
 
-          --- add hihlights for hash, timestamp, branch_names and tags
-          for _, name in ipairs(fields) do
+        local tags = #c.tags > 0 and ('(%s)'):format(table.concat(c.tags, ' | ')) or nil
+
+        local items = {
+          ['hash'] = hash,
+          ['timestamp'] = timestamp,
+          ['author'] = author,
+          ['branch_name'] = branch_names,
+          ['short_branch_name'] = short_branch_name,
+          ['tag'] = tags,
+          ['message'] = c.msg,
+        }
+
+        local function add_fields_to_row(flds)
+          local w = 0
+          for _, name in ipairs(flds) do
             local value = items[name]
             if value then
               highlights[#highlights + 1] = {
@@ -660,9 +680,34 @@ function M._gitgraph(raw_commits, opt, sym, fields)
                 start = offset,
                 stop = offset + #value,
               }
+              w = w + #value  -- +1 for the space added when concat the table
               add_to_row(value)
             end
           end
+          return w
+        end
+
+        -- Graph
+        add_to_row(row_to_str(proper_row))
+
+        if node_row then
+          local remaining_padding = this_row_left_field_size
+
+          -- HEAD star
+          if is_head then
+            add_to_row('*')
+            remaining_padding = remaining_padding - 2
+          end
+
+          --- Left fields
+          local w = add_fields_to_row(format.lfields)
+          remaining_padding = remaining_padding - w
+
+          -- Padding
+          add_to_row(('.'):rep(remaining_padding))
+
+          --- Right fields
+          add_fields_to_row(format.fields)
 
           if options.mode == 'debug' then
             local parents = ''
@@ -681,24 +726,13 @@ function M._gitgraph(raw_commits, opt, sym, fields)
             end
             add_to_row(':  ' .. children .. ' ' .. c.msg .. ' ' .. parents)
           end
+
         else
-          local c = graph[idx - 1].commit
-          assert(c)
-          if options.mode ~= 'debug' then
-            add_to_row((' '):rep(padding - #proper_row.cells))
-            add_to_row((' '):rep(7))
+          -- non-node row:
+          -- Draw graph connectors on every other row
+          add_to_row((' '):rep(left_padding - #proper_row.cells))
+          add_fields_to_row(format.fields2)
 
-            highlights[#highlights + 1] = {
-              start = offset,
-              stop = offset + #c.msg,
-              row = idx,
-              hg = ITEM_HGS['message'].name,
-            }
-
-            add_to_row(c.msg)
-          end
-
-          -- row_str = row_str:gsub('%s*$', '')
         end
 
         for _, hl in ipairs(row_to_highlights(proper_row, idx)) do

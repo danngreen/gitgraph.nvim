@@ -5,6 +5,7 @@ local log = require('gitgraph.log')
 ---@field commit string
 ---@field merge_commit_end string
 ---@field commit_end string
+---@field fallback_remote_icon string
 ---@field GVER string
 ---@field GHOR string
 ---@field GCLD string
@@ -26,11 +27,20 @@ local log = require('gitgraph.log')
 ---@field GLRUCL string
 ---@field GLRUCR string
 
----@alias I.GGVarName "hash" | "timestamp" | "author" | "branch_name" | "tag" | "message"
+---@class I.GGRemote
+---@field server string
+---@field icon string
+---@field highlight string
+
+---@alias I.GGVarName "hash" | "timestamp" | "author" | "branch_name" | "tag" | "message" | "short_branch_name"
 
 ---@class I.GGFormat
 ---@field timestamp string
 ---@field fields I.GGVarName[]
+---@field lfields I.GGVarName[]
+---@field fields2 I.GGVarName[]
+---@field remotes I.GGRemote[]
+
 
 ---@class I.Hooks
 ---@field on_select_commit fun(commit: I.Commit)
@@ -46,47 +56,49 @@ local M = {}
 
 ---@type I.GGConfig
 M.defaults = {
-  symbols = {
-    merge_commit = 'M',
-    commit = '*',
-    merge_commit_end = 'M',
-    commit_end = '*',
+	symbols = {
+		merge_commit = 'M',
+		commit = '*',
+		merge_commit_end = 'M',
+		commit_end = '*',
+		default_remote_branch = "▣",
+		local_branch = "○",
 
-    -- Advanced symbols
-    GVER = '│',
-    GHOR = '─',
-    GCLD = '╮',
-    GCRD = '╭',
-    GCLU = '╯',
-    GCRU = '╰',
-    GLRU = '┴',
-    GLRD = '┬',
-    GLUD = '┤',
-    GRUD = '├',
-    GFORKU = '┼',
-    GFORKD = '┼',
-    GRUDCD = '├',
-    GRUDCU = '├',
-    GLUDCD = '┤',
-    GLUDCU = '┤',
-    GLRDCL = '┬',
-    GLRDCR = '┬',
-    GLRUCL = '┴',
-    GLRUCR = '┴',
-  },
-  hooks = {
-    on_select_commit = function(commit)
-      log.info('selected commit:', commit.hash)
-    end,
-    on_select_range_commit = function(from, to)
-      log.info('selected range:', from.hash, to.hash)
-    end,
-  },
-  format = {
-    timestamp = '%H:%M:%S %d-%m-%Y',
-    fields = { 'hash', 'timestamp', 'author', 'branch_name', 'tag' },
-  },
-  log_level = vim.log.levels.ERROR,
+		-- Advanced symbols
+		GVER = '│',
+		GHOR = '─',
+		GCLD = '╮',
+		GCRD = '╭',
+		GCLU = '╯',
+		GCRU = '╰',
+		GLRU = '┴',
+		GLRD = '┬',
+		GLUD = '┤',
+		GRUD = '├',
+		GFORKU = '┼',
+		GFORKD = '┼',
+		GRUDCD = '├',
+		GRUDCU = '├',
+		GLUDCD = '┤',
+		GLUDCU = '┤',
+		GLRDCL = '┬',
+		GLRDCR = '┬',
+		GLRUCL = '┴',
+		GLRUCR = '┴',
+	},
+	hooks = {
+		on_select_commit = function(commit)
+			log.info('selected commit:', commit.hash)
+		end,
+		on_select_range_commit = function(from, to)
+			log.info('selected range:', from.hash, to.hash)
+		end,
+	},
+	format = {
+		timestamp = '%H:%M:%S %d-%m-%Y',
+		fields = { 'hash', 'timestamp', 'author', 'branch_name', 'tag' },
+	},
+	log_level = vim.log.levels.ERROR,
 }
 
 return M
