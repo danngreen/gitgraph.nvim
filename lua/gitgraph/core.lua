@@ -636,14 +636,13 @@ function M._gitgraph(raw_commits, opt, sym, format)
 
         local short_branch_name
         if (#c.branch_names > 0) then
-          local branches = branchutil.branches(c.branch_names, format.remotes, sym.default_remote_branch, sym.local_branch)
-          local name, icon = pairs(branches)(branches)
-          short_branch_name = "["..icon.."]"..name
-          if #branches > 0 then
-            short_branch_name = string.sub(short_branch_name, 1, this_row_left_field_size - 1)
-            short_branch_name = short_branch_name.."+"..tostring(#branches-1)
+          local branches = branchutil.branches(c.branch_names, format.remotes, sym.fallback_remote_icon)
+          -- get first branch name (if more than one on this commit, then display +N)
+          if #branches > 1 then
+            short_branch_name = string.sub(branches[1].text, 1, this_row_left_field_size - 1)
+            short_branch_name = short_branch_name.."+"..tostring(#branches - 1)
           else
-            short_branch_name = string.sub(short_branch_name, 1, this_row_left_field_size + 1)
+            short_branch_name = string.sub(branches[1].text, 1, this_row_left_field_size + 1)
           end
         else
           short_branch_name = nil
@@ -651,7 +650,7 @@ function M._gitgraph(raw_commits, opt, sym, format)
 
         local is_head = false
         if not head_found then
-          is_head = branch_names and branch_names:match('HEAD %->') or false
+          is_head = branch_names and branch_names:match('%HEAD %->') or false
           if is_head then
             head_found = true
             head_loc = idx
