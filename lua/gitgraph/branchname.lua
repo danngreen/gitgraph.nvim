@@ -64,7 +64,8 @@ local function branch_groups(tbl)
 end
 
 -- returns
--- branchlist[1] = { text = "[Xo]main",
+-- branchlist[1] = { icons = "Xo",
+-- 					 name = "main",
 -- 					 highlights = {
 -- 					     {hg = "origin", start = 2, stop = 3},
 -- 					     {hg = "LOCAL", start = 3, stop = 4}
@@ -75,9 +76,9 @@ M.branches = function(tbl, remotes, fallback_remote_icon)
 
 	local bgroups = branch_groups(tbl)
 	for name, servers in pairs(bgroups) do
-		local icons
+		local icons = ""
 		local hls = {}
-		for i, server in servers do
+		for i, server in ipairs(servers) do
 			icons = icons .. find_server_icon(server, remotes, fallback_remote_icon)
 			table.insert(hls, {
 				hg = find_server_highlight(server, remotes),
@@ -86,7 +87,8 @@ M.branches = function(tbl, remotes, fallback_remote_icon)
 			})
 		end
 		branches[#branches + 1] = {}
-		branches[#branches].text = "[" .. icons .. "]" .. name
+		branches[#branches].icons = icons
+		branches[#branches].name = name
 		branches[#branches].highlights = hls
 	end
 

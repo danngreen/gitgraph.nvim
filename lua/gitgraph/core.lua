@@ -634,19 +634,33 @@ function M._gitgraph(raw_commits, opt, sym, format)
 
         local branch_names = #c.branch_names > 0 and ('(%s)'):format(table.concat(c.branch_names, ' | ')) or nil
 
-        local short_branch_name
-        if (#c.branch_names > 0) then
-          local branches = branchutil.branches(c.branch_names, format.remotes, sym.fallback_remote_icon)
-          -- get first branch name (if more than one on this commit, then display +N)
-          if #branches > 1 then
-            short_branch_name = string.sub(branches[1].text, 1, this_row_left_field_size - 1)
-            short_branch_name = short_branch_name.."+"..tostring(#branches - 1)
-          else
-            short_branch_name = string.sub(branches[1].text, 1, this_row_left_field_size + 1)
+        local function add_branch_name()
+          if (#c.branch_names > 0) then
+            local branches = branchutil.branches(c.branch_names, format.remotes, sym.fallback_remote_icon)
+
+            if #branches > 0 then
+              
+              -- get first branch name (if more than one on this commit, then display +N)
+              local icons = "["..branches[1].icons.."]"
+              for _,hl in ipairs(branches[1].highlights) do
+                  hl.row = idx
+                  hl.start = hl.start + offset
+                  hl.stop = hl.stop + offset
+                  highlights[#highlights+1] = hl
+              end
+              add_to_row(icons)
+
+              local name = ""
+              if #branches > 1 then
+                name = string.sub(branches[1].name, 1, this_row_left_field_size - 1)
+                name = name.."+"..tostring(#branches - 1)
+              else
+                name = string.sub(branches[1].name, 1, this_row_left_field_size + 1)
+              end
+              add_to_row(name)
+            end
           end
-        else
-          short_branch_name = nil
-        end
+      end
 
         local is_head = false
         if not head_found then
@@ -664,7 +678,6 @@ function M._gitgraph(raw_commits, opt, sym, format)
           ['timestamp'] = timestamp,
           ['author'] = author,
           ['branch_name'] = branch_names,
-		  ['short_branch_name'] = short_branch_name,
           ['tag'] = tags,
           ['message'] = c.msg,
         }
@@ -700,8 +713,9 @@ function M._gitgraph(raw_commits, opt, sym, format)
           end
 
           --- Left fields
-		  local w = add_fields_to_row(format.lfields)
-          remaining_padding = remaining_padding - w
+          local st = offset
+		  add_branch_name()
+          remaining_padding = remaining_padding - (offset - st)
 
           -- Padding
 		  add_to_row(('.'):rep(remaining_padding))
