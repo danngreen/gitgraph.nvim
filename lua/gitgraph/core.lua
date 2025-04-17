@@ -620,6 +620,7 @@ function M._gitgraph(raw_commits, opt, sym, format)
       local left_padding = left_field_max_width + graph_field_max_width
       local this_row_graph_width = #proper_row.cells
       local this_row_left_field_size = left_padding - this_row_graph_width
+      local num_dashes_branchname = 4
 
       local hash = c.hash:sub(1, 7)
       local timestamp = c.author_date
@@ -634,16 +635,10 @@ function M._gitgraph(raw_commits, opt, sym, format)
           if #branches > 0 then
 
             -- get first branch name (if more than one on this commit, then display +N)
-            local icons = "["..branches[1].icons.."]"
-            for _,hl in ipairs(branches[1].highlights) do
-                hl.row = idx
-                hl.start = hl.start + linepos + 1
-                hl.stop = hl.stop + linepos + 1
-                highlights[#highlights+1] = hl
-            end
-            line = line..icons
-            linepos = linepos + 2 + branches[1].numicons
-            numchars = numchars + #icons
+            local icons = "["..branches[1].icons.."] "
+            local icon_numchars = (3 + branches[1].numicons)
+            local multibyte_diff = #icons - icon_numchars
+
             -- add_to_row(icons)
 
             local name = ""
@@ -653,7 +648,19 @@ function M._gitgraph(raw_commits, opt, sym, format)
             else
               name = string.sub(branches[1].name, 1, this_row_left_field_size + 1)
             end
+
+            local padding = left_field_max_width - icon_numchars - #name - num_dashes_branchname
+
+            add_to_row((' '):rep(padding))
             add_to_row(name)
+            for _,hl in ipairs(branches[1].highlights) do
+                hl.row = idx
+                hl.start = hl.start + linepos + 1
+                hl.stop = hl.stop + linepos + 1
+                highlights[#highlights+1] = hl
+            end
+            add_to_row(icons)
+            linepos = linepos - multibyte_diff
           end
         end
     end
@@ -699,6 +706,7 @@ function M._gitgraph(raw_commits, opt, sym, format)
       local graph_linepos = left_field_max_width
 
       if node_row then
+        -- Branch name
         add_branch_name()
 
         local char
@@ -710,6 +718,7 @@ function M._gitgraph(raw_commits, opt, sym, format)
           char = ' '
         end
 
+        highlights[#highlights + 1] = { hg = "LineNr", row = idx, start = numchars, stop = left_field_max_width + numchars - linepos }
         if linepos > 0 then
           add_to_row((char):rep(left_field_max_width - linepos))
         else
@@ -722,7 +731,7 @@ function M._gitgraph(raw_commits, opt, sym, format)
 
 
         -- Padding
-        local rem = 50 - linepos
+        local rem = 60 - linepos
         add_to_row((' '):rep(rem))
 
           --- Right fields

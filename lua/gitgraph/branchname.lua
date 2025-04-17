@@ -45,7 +45,7 @@ local function branch_groups(tbl)
 		-- skip "head", it's not a branch
 		if branch ~= "head" then
 			-- remove leading "head ->" on branches that happen to be at head
-			branch = string.gsub(branch, "head %-> ", "")
+			branch = string.gsub(branch, "HEAD %-> ", "")
 
 			-- make sure branches[branch] is empty if it doesn't exist already
 			branches[branch] = branches[branch] and branches[branch] or {}
