@@ -493,10 +493,11 @@ function M._gitgraph(raw_commits, opt, sym, format)
 
     ---@param row I.Row
     ---@param row_idx integer
+    ---@param starting_offset integer
     ---@return I.Highlight[]
-    local function row_to_highlights(row, row_idx)
+    local function row_to_highlights(row, row_idx, starting_offset)
       local row_hls = {}
-      local offset = 0
+      local offset = starting_offset
 
       for j = 1, #row.cells do
         local cell = row.cells[j]
@@ -590,175 +591,182 @@ function M._gitgraph(raw_commits, opt, sym, format)
     for idx = 1, #graph do
       local proper_row = graph[idx]
 
-      local row_str_arr = {}
-      local offset = 0
+	    local line = ""
+	    local linepos = 0
+	    local numchars = 0
 
       ---@param stuff string
       local function add_to_row(stuff)
-        row_str_arr[#row_str_arr + 1] = stuff
-        offset = offset + #stuff + 1 -- add one because a space will be implied later with concat separator
+		    line = line..stuff
+		    linepos = linepos + #stuff
+        numchars = numchars + #stuff
       end
-
-      -- TODO: limit this so we do not leave the screen?
-      local padding = width + 2
 
       -- part 1
-      if options.mode == 'debug' then
-        add_to_row(row_to_debg(proper_row))
-        add_to_row((' '):rep(padding - #proper_row.cells))
-        add_to_row(row_to_str(proper_row))
-      elseif options.mode == 'test' then
-        add_to_row(row_to_test(proper_row))
-      end
 
       local c = proper_row.commit
       local node_row
+
       if c then
-		  node_row = true
-	  else
+		    node_row = true
+	    else
           node_row = false
           c = graph[idx - 1].commit
           assert(c)
       end
 
-      local left_field_max_width = 15
-      local graph_field_max_width = padding
+      local left_field_max_width = 30
+      local graph_field_max_width = width
       local left_padding = left_field_max_width + graph_field_max_width
       local this_row_graph_width = #proper_row.cells
       local this_row_left_field_size = left_padding - this_row_graph_width
 
-      if options.mode ~= 'test' then
-        local hash = c.hash:sub(1, 7)
-        local timestamp = c.author_date
-        local author = c.author_name
+      local hash = c.hash:sub(1, 7)
+      local timestamp = c.author_date
+      local author = c.author_name
 
-        local branch_names = #c.branch_names > 0 and ('(%s)'):format(table.concat(c.branch_names, ' | ')) or nil
+      local branch_names = #c.branch_names > 0 and ('(%s)'):format(table.concat(c.branch_names, ' | ')) or nil
 
-        local function add_branch_name()
-          if (#c.branch_names > 0) then
-            local branches = branchutil.branches(c.branch_names, format.remotes, sym.fallback_remote_icon)
+      local function add_branch_name()
+        if (#c.branch_names > 0) then
+          local branches = branchutil.branches(c.branch_names, format.remotes, sym.fallback_remote_icon)
 
-            if #branches > 0 then
-              
-              -- get first branch name (if more than one on this commit, then display +N)
-              local icons = "["..branches[1].icons.."]"
-              for _,hl in ipairs(branches[1].highlights) do
-                  hl.row = idx
-                  hl.start = hl.start + offset
-                  hl.stop = hl.stop + offset
-                  highlights[#highlights+1] = hl
-              end
-              add_to_row(icons)
+          if #branches > 0 then
 
-              local name = ""
-              if #branches > 1 then
-                name = string.sub(branches[1].name, 1, this_row_left_field_size - 1)
-                name = name.."+"..tostring(#branches - 1)
-              else
-                name = string.sub(branches[1].name, 1, this_row_left_field_size + 1)
-              end
-              add_to_row(name)
+            -- get first branch name (if more than one on this commit, then display +N)
+            local icons = "["..branches[1].icons.."]"
+            for _,hl in ipairs(branches[1].highlights) do
+                hl.row = idx
+                hl.start = hl.start + linepos + 1
+                hl.stop = hl.stop + linepos + 1
+                highlights[#highlights+1] = hl
             end
-          end
-      end
+            line = line..icons
+            linepos = linepos + 2 + branches[1].numicons
+            numchars = numchars + #icons
+            -- add_to_row(icons)
 
-        local is_head = false
-        if not head_found then
-          is_head = branch_names and branch_names:match('%HEAD %->') or false
-          if is_head then
-            head_found = true
-            head_loc = idx
+            local name = ""
+            if #branches > 1 then
+              name = string.sub(branches[1].name, 1, this_row_left_field_size - 4)
+              name = name.." (+"..tostring(#branches - 1)..")"
+            else
+              name = string.sub(branches[1].name, 1, this_row_left_field_size + 1)
+            end
+            add_to_row(name)
           end
         end
+    end
 
-        local tags = #c.tags > 0 and ('(%s)'):format(table.concat(c.tags, ' | ')) or nil
+      local is_head = false
+      if not head_found then
+        is_head = branch_names and branch_names:match('%HEAD %->') or false
+        if is_head then
+          head_found = true
+          head_loc = idx
+        end
+      end
 
-        local items = {
-          ['hash'] = hash,
-          ['timestamp'] = timestamp,
-          ['author'] = author,
-          ['branch_name'] = branch_names,
-          ['tag'] = tags,
-          ['message'] = c.msg,
-        }
+      local tags = #c.tags > 0 and ('(%s)'):format(table.concat(c.tags, ' | ')) or nil
 
-        local function add_fields_to_row(flds)
-          local w = 0
-          for _, name in ipairs(flds) do
-            local value = items[name]
-            if value then
-              highlights[#highlights + 1] = {
-                hg = ITEM_HGS[name].name,
-                row = idx,
-                start = offset,
-                stop = offset + #value,
-              }
-              w = w + #value  -- +1 for the space added when concat the table
-              add_to_row(value)
-            end
+      local items = {
+        ['hash'] = hash,
+        ['timestamp'] = timestamp,
+        ['author'] = author,
+        ['branch_name'] = branch_names,
+        ['tag'] = tags,
+        ['message'] = c.msg,
+      }
+
+      local function add_fields_to_row(flds)
+        local w = 0
+        for _, name in ipairs(flds) do
+          local value = items[name]
+          if value then
+            highlights[#highlights + 1] = {
+              hg = ITEM_HGS[name].name,
+              row = idx,
+              start = linepos,
+              stop = linepos + #value,
+            }
+            w = w + #value  -- +1 for the space added when concat the table
+            add_to_row(value)
           end
-          return w
+        end
+        return w
+      end
+
+      local graph_linepos = left_field_max_width
+
+      if node_row then
+        add_branch_name()
+
+        local char
+        if is_head then
+          char = '*'
+        elseif linepos > 0 then
+          char = '-'
+        else
+          char = ' '
+        end
+
+        if linepos > 0 then
+          add_to_row((char):rep(left_field_max_width - linepos))
+        else
+          add_to_row((char):rep(left_field_max_width))
         end
 
         -- Graph
+        graph_linepos = numchars
         add_to_row(row_to_str(proper_row))
 
-        if node_row then
-          local remaining_padding = this_row_left_field_size
 
-          -- HEAD star
-          if is_head then
-            add_to_row('*')
-            remaining_padding = remaining_padding - 2
-          end
-
-          --- Left fields
-          local st = offset
-		  add_branch_name()
-          remaining_padding = remaining_padding - (offset - st)
-
-          -- Padding
-		  add_to_row(('.'):rep(remaining_padding))
+        -- Padding
+        local rem = 50 - linepos
+        add_to_row((' '):rep(rem))
 
           --- Right fields
-		  add_fields_to_row(format.fields)
+        add_fields_to_row(format.fields)
 
-          if options.mode == 'debug' then
-            local parents = ''
-            for _, h in ipairs(graph[idx].commit.parents) do
-              local p = commits[h]
-              parents = parents .. (p and p.msg or '?')
-            end
-
-            local children = ''
-            for _, h in ipairs(graph[idx].commit.children) do
-              local p = commits[h]
-              children = children .. (p and p.msg or '?')
-            end
-            if #children == 0 then
-              children = '_'
-            end
-            add_to_row(':  ' .. children .. ' ' .. c.msg .. ' ' .. parents)
+        if options.mode == 'debug' then
+          local parents = ''
+          for _, h in ipairs(graph[idx].commit.parents) do
+            local p = commits[h]
+            parents = parents .. (p and p.msg or '?')
           end
 
-        else
-          -- non-node row:
-          -- Draw graph connectors on every other row
-          add_to_row((' '):rep(left_padding - #proper_row.cells))
-          add_fields_to_row(format.fields2)
-
+          local children = ''
+          for _, h in ipairs(graph[idx].commit.children) do
+            local p = commits[h]
+            children = children .. (p and p.msg or '?')
+          end
+          if #children == 0 then
+            children = '_'
+          end
+          add_to_row(':  ' .. children .. ' ' .. c.msg .. ' ' .. parents)
         end
 
-        for _, hl in ipairs(row_to_highlights(proper_row, idx)) do
-          highlights[#highlights + 1] = hl
-        end
-      end
-
-      if options.mode == 'debug' then
-        lines[#lines + 1] = table.concat(row_str_arr, ' '):gsub('%s*$', '')
       else
-        lines[#lines + 1] = table.concat(row_str_arr, ' ')
+        -- non-node row:
+
+        add_to_row((' '):rep(left_field_max_width))
+
+        -- Graph
+        graph_linepos = numchars
+        add_to_row(row_to_str(proper_row))
+
+        -- Draw graph connectors on every other row
+        add_to_row((' '):rep(left_padding - #proper_row.cells))
+        add_fields_to_row(format.fields2)
+
       end
+
+      -- highlights for graph
+      for _, hl in ipairs(row_to_highlights(proper_row, idx, graph_linepos)) do
+        highlights[#highlights + 1] = hl
+      end
+
+	  lines[#lines + 1] = line
     end
 
     return lines, highlights, head_loc

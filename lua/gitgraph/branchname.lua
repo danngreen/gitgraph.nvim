@@ -71,23 +71,29 @@ end
 -- 					     {hg = "LOCAL", start = 3, stop = 4}
 -- 			       }
 
-M.branches = function(tbl, remotes, fallback_remote_icon)
+M.branches = function(tbl, remotes, fallback_remote_icon, starting_offset)
 	local branches = {}
 
 	local bgroups = branch_groups(tbl)
 	for name, servers in pairs(bgroups) do
 		local icons = ""
+    local numicons = 0
 		local hls = {}
-		for i, server in ipairs(servers) do
-			icons = icons .. find_server_icon(server, remotes, fallback_remote_icon)
+    local i = 0
+		for _, server in ipairs(servers) do
+			local icon = find_server_icon(server, remotes, fallback_remote_icon)
+			icons = icons .. icon
+      numicons = numicons + 1
 			table.insert(hls, {
 				hg = find_server_highlight(server, remotes),
 				start = i,
-				stop = i + 1
+				stop = i + #icon - 1
 			})
+      i = i + #icon
 		end
 		branches[#branches + 1] = {}
 		branches[#branches].icons = icons
+		branches[#branches].numicons = numicons
 		branches[#branches].name = name
 		branches[#branches].highlights = hls
 	end
